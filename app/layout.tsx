@@ -31,6 +31,7 @@ export const viewport: Viewport = { themeColor: '#ffffff', width: 'device-width'
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={mono.variable}>
+      <head><script src="https://island.contact/snippet.js" data-site="freedoc-web" defer></script></head>
       <body>
         <a href="#main" className="skip">Skip to content</a>
         <div className="app">
