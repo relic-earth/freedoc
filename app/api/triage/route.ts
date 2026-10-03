@@ -63,6 +63,9 @@ function scrub(s: unknown, max = 400) {
 }
 
 export async function POST(req: Request) {
+  if (req.headers.get('x-terms-accepted') !== '2026-10-03' || req.headers.get('x-health-consent') !== '1') {
+    return Response.json({ error: 'Please accept the Terms of Use and give health-data consent to continue.' }, { status: 400 });
+  }
   let body: any;
   try {
     body = await req.json();

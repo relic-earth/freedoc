@@ -1,4 +1,5 @@
 'use client';
+import TermsCheck, { TERMS_VERSION } from './TermsCheck';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { track } from '@vercel/analytics';
 import { detectEmergency, type EmergencyKind } from '@/lib/emergency';
@@ -45,6 +46,8 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [emergency, setEmergency] = useState<EmergencyKind>(null);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreeHealth, setAgreeHealth] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState('');
   const topRef = useRef<HTMLDivElement>(null);
@@ -89,7 +92,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
   }
 
   async function post(payload: any) {
-    const r = await fetch('/api/triage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+    const r = await fetch('/api/triage', { method: 'POST', headers: { 'content-type': 'application/json', 'x-terms-accepted': TERMS_VERSION, 'x-health-consent': '1' }, body: JSON.stringify(payload) });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'Something went wrong. Please try again.');
     return j;
@@ -102,6 +105,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
     if (!t) return setError('Tell us what is going on first.');
     const em = detectEmergency(t);
     if (em) return goEmergency(em);
+    if (!agreeTerms || !agreeHealth) return setError('Please tick both boxes below to continue.');
     setStep('loadingQ');
     track('triage_start');
     try {
@@ -253,7 +257,11 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
             ))}
           </div>
           {error && <p className="err">{error}</p>}
-          <button className="go" type="submit">
+          <TermsCheck checked={agreeTerms} onChange={setAgreeTerms} />
+          <TermsCheck checked={agreeHealth} onChange={setAgreeHealth}>
+            I understand this is not medical or mental-health care, not for emergencies (call 911 / 988), and I consent to my submission being processed by AI providers as described in the <a href="/privacy" target="_blank" rel="noopener" style={{ textDecoration: 'underline', fontWeight: 700, color: 'inherit' }}>Privacy Policy</a> and <a href="/health-data" target="_blank" rel="noopener" style={{ textDecoration: 'underline', fontWeight: 700, color: 'inherit' }}>Consumer Health Data Privacy Policy</a>.
+          </TermsCheck>
+          <button className="go" type="submit" disabled={!(agreeTerms && agreeHealth) && !detectEmergency(text.trim())}>
             Check symptoms — free
           </button>
           <p className="fine">
