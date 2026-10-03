@@ -336,3 +336,6 @@ button { font: inherit; cursor: pointer; }
   .logo-name { font-size: 24px; }
   .composer-h .dim { display: none; }
 }
+
+/* Keyboard focus is always visible (accessibility) */
+:focus-visible{outline:3px solid currentColor !important;outline-offset:3px !important}
