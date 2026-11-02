@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { detectEmergency } from '@/lib/emergency';
+import { QUERY_LIMIT, usedQueries, recordQuery, notifyLimitOnce } from '@/lib/quota';
 import { WHO, isLevel, type Who, type Question, type Verdict } from '@/lib/triage';
 
 export const runtime = 'nodejs';
@@ -85,6 +86,21 @@ export async function POST(req: Request) {
   if (emergency) return Response.json({ type: 'emergency', kind: emergency });
 
   const patient = WHO[who].phrase;
+
+  // 1,000-search cap: each new search (the questions step) counts as one. Follow-up verdict calls are free.
+  if (body.step === 'questions') {
+    try {
+      const used = await usedQueries();
+      if (used >= QUERY_LIMIT) {
+        await notifyLimitOnce();
+        return Response.json({ error: 'FreeDoc has reached its free search limit for now. If this is an emergency, call 911.' }, { status: 429 });
+      }
+      await recordQuery();
+      if (used + 1 >= QUERY_LIMIT) await notifyLimitOnce();
+    } catch (e) {
+      console.error('quota check failed', e);
+    }
+  }
 
   try {
     if (body.step === 'questions') {

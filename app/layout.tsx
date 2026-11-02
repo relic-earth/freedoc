@@ -8,6 +8,7 @@ import './logo.css';
 import './legal.css';
 import './insurance.css';
 import './depth.css';
+import './blues.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
 
 const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['500', '700', '800'], variable: '--mono', display: 'swap' });
 
-export const viewport: Viewport = { themeColor: '#ffffff', width: 'device-width', initialScale: 1 };
+export const viewport: Viewport = { themeColor: '#06163a', width: 'device-width', initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

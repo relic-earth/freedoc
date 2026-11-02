@@ -1,0 +1,77 @@
+/* ==========================================================================
+   FreeDoc — "Harold Blues" theme.
+   Loaded last: deep navy ink, royal and cerulean blues, icy blue surfaces.
+   Care-level colors (home / doctor / urgent / ER) stay semantic on purpose.
+   ========================================================================== */
+:root {
+  --hb-navy: #06163a;
+  --hb-midnight: #0a2260;
+  --hb-royal: #1445c4;
+  --hb-cobalt: #1f5fe0;
+  --hb-azure: #3b82f6;
+  --hb-sky: #7db4ff;
+  --hb-ice: #e7f0ff;
+  --hb-mist: #f2f7ff;
+
+  --bg: #eaf1fe;
+  --side: #ffffff;
+  --panel-2: #f2f7ff;
+  --ink: var(--hb-navy);
+  --ink-2: #1e3a73;
+  --ink-3: #4a6199;
+  --line: #d6e3fb;
+  --line-2: #b8cef5;
+  --brand: var(--hb-royal);
+  --brand-2: var(--hb-midnight);
+  --brand-hi: var(--hb-azure);
+  --brand-soft: var(--hb-ice);
+  --brand-line: #aac6f5;
+  --teal: var(--hb-cobalt);
+  --teal-soft: var(--hb-ice);
+  --accent: var(--hb-azure);
+  --accent-ink: var(--hb-royal);
+  --glow: 0 0 0 3px rgba(20, 69, 196, 0.2);
+}
+html, body { color-scheme: light; }
+
+/* background wash */
+body::before { background: linear-gradient(180deg, #f3f8ff 0%, #dfeaff 100%) !important; }
+
+/* sidebar + topbar: navy */
+.side { background: linear-gradient(180deg, var(--hb-navy) 0%, var(--hb-midnight) 100%); border-right-color: #0f2c78; }
+.side .side-link { color: #c9dbff; }
+.side .side-link:hover { background: rgba(125, 180, 255, 0.14); color: #fff; }
+.side .side-link.on { background: rgba(125, 180, 255, 0.22); color: #fff; }
+.side .side-link .hash { color: var(--hb-sky); }
+.side .side-h { color: #86a6e8; }
+.side .side-ws, .side .side-foot { border-color: #14337f; }
+.side .side-status, .side .hud-mono, .side .hud-mono.dim, .side-foot .hud-mono { color: #9db9f0; }
+.side .logo, .side .logo * { color: #fff; }
+.topbar { background: rgba(244, 249, 255, 0.92); border-bottom-color: var(--line-2); }
+.chan-name .hash { color: var(--hb-cobalt); }
+
+/* logo tile in blue (plus sign unchanged) */
+.logo-mark { background: linear-gradient(180deg, var(--hb-azure), var(--hb-royal)) !important; }
+
+/* hero headline */
+.hero h1 { background: linear-gradient(180deg, var(--hb-navy) 0%, var(--hb-navy) 40%, var(--hb-royal) 100%) !important; -webkit-background-clip: text; background-clip: text; }
+.ask-kicker, .kicker, .section .kicker, .hud-mono { color: var(--hb-royal); }
+
+/* search / triage card */
+.start-card { box-shadow: var(--shadow-lg), 0 0 0 1px rgba(20, 69, 196, 0.2); }
+.start-card::before { background: linear-gradient(90deg, var(--hb-navy), var(--hb-royal), var(--hb-sky)) !important; }
+.start-card textarea, .start-card input[type="text"] { border-color: var(--hb-royal); }
+.who.on, .opt.on { box-shadow: inset 0 0 0 2px var(--hb-royal); }
+.go { background: linear-gradient(180deg, var(--hb-azure) 0%, var(--hb-royal) 55%, var(--hb-midnight) 100%) !important; }
+.go:hover { background: linear-gradient(180deg, #5a9bff 0%, #1a52e0 55%, #0d2a78 100%) !important; }
+.go.ghost { background: linear-gradient(180deg, #fff, var(--hb-mist)) !important; color: var(--hb-midnight); }
+.care-btn:first-child { background: linear-gradient(180deg, var(--hb-azure) 0%, var(--hb-royal) 60%, var(--hb-midnight) 100%) !important; }
+.act.primary { background: linear-gradient(180deg, var(--hb-azure) 0%, var(--hb-royal) 60%, var(--hb-midnight) 100%) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 1px 0 #061a52, 0 14px 24px -14px rgba(20,69,196,.8) !important; }
+
+/* orb + trust card */
+.orb { background: radial-gradient(circle at 50% 55%, #5aa0ff 0%, var(--hb-royal) 55%, var(--hb-navy) 100%) !important; }
+.orb-ring.r2 { border-color: rgba(59, 130, 246, 0.35) !important; }
+.trust-card h2, .trust-card .tk { color: var(--hb-royal); }
+
+a { text-decoration-color: var(--hb-sky); }
+:focus-visible { outline: 3px solid var(--hb-azure); outline-offset: 2px; }
