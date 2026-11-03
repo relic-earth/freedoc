@@ -54,7 +54,7 @@ body::before { background: linear-gradient(180deg, #f3f8ff 0%, #dfeaff 100%) !im
 .logo-mark { background: linear-gradient(180deg, var(--hb-azure), var(--hb-royal)) !important; }
 
 /* hero headline */
-.hero h1 { background: linear-gradient(180deg, var(--hb-navy) 0%, var(--hb-navy) 40%, var(--hb-royal) 100%) !important; -webkit-background-clip: text; background-clip: text; }
+.hero h1 { background-image: linear-gradient(180deg, var(--hb-navy) 0%, var(--hb-navy) 40%, var(--hb-royal) 100%) !important; }
 .ask-kicker, .kicker, .section .kicker, .hud-mono { color: var(--hb-royal); }
 
 /* search / triage card */
