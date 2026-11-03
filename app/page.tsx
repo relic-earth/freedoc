@@ -36,8 +36,8 @@ export default function Home() {
       <section className="hero hero-ask">
         <div className="wrap">
           <p className="ask-kicker">Free healthcare for everyone · No account</p>
-          <h1>Should I go to the ER?</h1>
-          <p className="hero-legal">Type what’s going on and get a suggested next step in about 60 seconds. FreeDoc is an AI tool, not a doctor or nurse, and it does not diagnose. In an emergency, call 911.</p>
+          <h1>Free healthcare for everyone.</h1>
+          <p className="hero-legal">Should I go to the ER? Type what’s going on and get a suggested next step in about 60 seconds. FreeDoc is an AI tool, not a doctor or nurse, and it does not diagnose. In an emergency, call 911.</p>
           <Triage autoFocus />
           <Link className="ins-teaser" href="/insurance">
             <span className="pt-badge">No insurance?</span>

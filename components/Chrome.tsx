@@ -96,8 +96,8 @@ export function Header() {
           <p className="chan-topic">{ch.topic}</p>
         </div>
         <nav className="nav">
-          <Link href="/symptoms" className="search" aria-label="Search symptom guides">
-            <span aria-hidden>⌕</span> Search symptoms
+          <Link href="/#check" className="search" aria-label="Describe your symptoms">
+            <span aria-hidden>⌕</span> Describe symptoms
           </Link>
           <a href="tel:911" className="call911">
             Call 911
