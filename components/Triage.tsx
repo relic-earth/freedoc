@@ -105,7 +105,6 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
     if (!t) return setError('Tell us what is going on first.');
     const em = detectEmergency(t);
     if (em) return goEmergency(em);
-    if (!agreeTerms || !agreeHealth) return setError('Please tick both boxes below to continue.');
     setStep('loadingQ');
     track('triage_start');
     try {
@@ -257,11 +256,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
             ))}
           </div>
           {error && <p className="err">{error}</p>}
-          <TermsCheck checked={agreeTerms} onChange={setAgreeTerms} />
-          <TermsCheck checked={agreeHealth} onChange={setAgreeHealth}>
-            I understand this is not medical or mental-health care, not for emergencies (call 911 / 988), and I consent to my submission being processed by AI providers as described in the <a href="/privacy" target="_blank" rel="noopener" style={{ textDecoration: 'underline', fontWeight: 700, color: 'inherit' }}>Privacy Policy</a> and <a href="/health-data" target="_blank" rel="noopener" style={{ textDecoration: 'underline', fontWeight: 700, color: 'inherit' }}>Consumer Health Data Privacy Policy</a>.
-          </TermsCheck>
-          <button className="go" type="submit" disabled={!(agreeTerms && agreeHealth) && !detectEmergency(text.trim())}>
+          <button className="go" type="submit" disabled={!text.trim()}>
             Check symptoms — free
           </button>
           <p className="fine">

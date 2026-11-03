@@ -35,7 +35,7 @@ export default function Home() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(siteLd) }} />
       <section className="hero hero-ask">
         <div className="wrap">
-          <p className="ask-kicker">Free AI symptom check · No account</p>
+          <p className="ask-kicker">Free healthcare for everyone · No account</p>
           <h1>Should I go to the ER?</h1>
           <p className="hero-legal">Type what’s going on and get a suggested next step in about 60 seconds. FreeDoc is an AI tool, not a doctor or nurse, and it does not diagnose. In an emergency, call 911.</p>
           <Triage autoFocus />
