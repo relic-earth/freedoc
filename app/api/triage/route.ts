@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { detectEmergency } from '@/lib/emergency';
+import { fallbackVerdict } from '@/lib/fallbackTriage';
 import { WHO, isLevel, type Who, type Question, type Verdict } from '@/lib/triage';
 
 export const runtime = 'nodejs';
@@ -136,6 +137,9 @@ Return JSON with exactly these keys:
     return Response.json({ type: 'verdict', verdict });
   } catch (e) {
     console.error('triage error', e);
-    return Response.json({ error: 'FreeDoc is busy right now. Please try again in a moment.' }, { status: 502 });
+    // Never leave people with a dead search box: if the AI provider is down or out of credits,
+    // skip the follow-up questions and answer from the built-in symptom guidance.
+    if (body.step === 'questions') return Response.json({ type: 'questions', questions: [] });
+    return Response.json({ type: 'verdict', verdict: fallbackVerdict(text, who) });
   }
 }
