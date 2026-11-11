@@ -3,11 +3,12 @@ import TermsCheck, { TERMS_VERSION } from './TermsCheck';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { track } from '@vercel/analytics';
 import { detectEmergency, type EmergencyKind } from '@/lib/emergency';
+import { SUPPORT_LINES, type SupportGuide } from '@/lib/support';
 import { LEVELS, WHO, medlineUrl, type Question, type Verdict, type Who } from '@/lib/triage';
 import { CARE, SPONSOR } from '@/lib/partners';
 import { BotLine, Reactor } from '@/components/Chrome';
 
-type Step = 'start' | 'loadingQ' | 'questions' | 'loadingV' | 'verdict' | 'emergency';
+type Step = 'start' | 'loadingQ' | 'questions' | 'loadingV' | 'verdict' | 'emergency' | 'support';
 
 const EXAMPLES: Record<Who, string[]> = {
   me: ['Headache and fever since yesterday', 'Sore throat and it hurts to swallow', 'Twisted my ankle and it is swollen', 'Stomach pain on the lower right side'],
@@ -45,6 +46,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const [guide, setGuide] = useState<SupportGuide | null>(null);
   const [emergency, setEmergency] = useState<EmergencyKind>(null);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreeHealth, setAgreeHealth] = useState(false);
@@ -76,7 +78,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
       return;
     }
     if (step === 'start') whatRef.current?.focus({ preventScroll: true });
-    if (step === 'verdict') levelRef.current?.focus({ preventScroll: true });
+    if (step === 'verdict' || step === 'support') levelRef.current?.focus({ preventScroll: true });
     if (step === 'emergency') emRef.current?.focus({ preventScroll: true });
     const el = topRef.current;
     if (!el) return;
@@ -110,6 +112,12 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
     try {
       const j = await post({ step: 'questions', who, text: t });
       if (j.type === 'emergency') return goEmergency(j.kind);
+      if (j.type === 'support') {
+        setGuide(j.guide);
+        setStep('support');
+        track('support_guide');
+        return;
+      }
       if (!j.questions?.length) return finish({});
       setQuestions(j.questions);
       setAnswers({});
@@ -151,6 +159,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
   function reset() {
     setStep('start');
     setVerdict(null);
+    setGuide(null);
     setQuestions([]);
     setAnswers({});
     setEmergency(null);
@@ -331,6 +340,49 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
           <button className="link-btn" onClick={reset}>
             This isn’t an emergency — start over
           </button>
+        </div>
+      )}
+
+      {step === 'support' && guide && (
+        <div className="verdict-wrap">
+          <div className="verdict">
+            <BotLine />
+            <p className="v-kicker">Support guide · AI-generated</p>
+            <p className="v-level" ref={levelRef} tabIndex={-1}>💙 {guide.title}</p>
+            <p className="v-sum">{guide.summary}</p>
+            <p className="v-legal">FreeDoc is an AI tool, not a therapist, counselor, clergy member, or doctor. This is general information, not a diagnosis or professional advice, and it will not tell you what to believe or what to do.</p>
+          </div>
+          <div className="grid2">
+            <div className="card">
+              <p className="step-label">Things to think about</p>
+              <ul className="list">{guide.reflect.map((d) => <li key={d}>{d}</li>)}</ul>
+            </div>
+            <div className="card">
+              <p className="step-label">Gentle next steps</p>
+              <ul className="list">{guide.steps.map((d) => <li key={d}>{d}</li>)}</ul>
+            </div>
+            <div className="card">
+              <p className="step-label">Ways to start the conversation</p>
+              <ul className="list">{guide.say.map((d) => <li key={d}>{d}</li>)}</ul>
+            </div>
+            <div className="card">
+              <p className="step-label">Who can help</p>
+              <ul className="list">{guide.reachOut.map((d) => <li key={d}>{d}</li>)}</ul>
+            </div>
+          </div>
+          <div className="card care">
+            <p className="step-label">Free support, any time</p>
+            <div className="care-grid">
+              {SUPPORT_LINES.map((c) => (
+                <a key={c.label} href={c.href} className="care-btn call" onClick={() => track('support_line_click')}>
+                  <span className="care-title">{c.label} →</span>
+                  <span className="care-sub">{c.sub}</span>
+                </a>
+              ))}
+            </div>
+            <p className="disclose">If you are in danger or thinking about ending your life, call or text 988 or call 911 now.</p>
+          </div>
+          <button className="go ghost" onClick={reset}>Ask something else</button>
         </div>
       )}
 

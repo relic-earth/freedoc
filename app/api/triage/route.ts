@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { detectEmergency } from '@/lib/emergency';
 import { fallbackVerdict } from '@/lib/fallbackTriage';
+import { detectSupportTopic, STATIC_GUIDES } from '@/lib/support';
 import { WHO, isLevel, type Who, type Question, type Verdict } from '@/lib/triage';
 
 export const runtime = 'nodejs';
@@ -83,6 +84,45 @@ export async function POST(req: Request) {
   if (emergency) return Response.json({ type: 'emergency', kind: emergency });
 
   const patient = WHO[who].phrase;
+
+  // Emotional, relationship and faith topics get a support guide instead of a care level.
+  const supportTopic = detectSupportTopic(allText);
+  if (supportTopic) {
+    const fallback = STATIC_GUIDES[supportTopic];
+    try {
+      const sys = `You are FreeDoc, an automated AI tool offering general emotional support information. You are not a therapist, counselor, clergy member, lawyer or doctor, and you never claim to be one. You do not diagnose.
+Be warm, calm, non-judgmental and practical, in plain short sentences at a 6th-grade reading level. Speak directly to the user.
+Rules:
+- Do not tell the user what to believe, who to love, whether to stay or leave, or which religion, relationship style or moral view is right. Offer perspectives and reflective questions, and respect their values and traditions.
+- For cheating or infidelity: take the pain seriously whichever side the user is on; do not shame; encourage honesty, safety, and time before big decisions; mention STI testing only if sexual contact is described.
+- For loving or being drawn to more than one person: be even-handed between monogamy and consensual non-monogamy; stress honesty, consent and care for everyone, and never encourage deception.
+- For faith or religious struggle: treat doubt and belief with equal respect; point to trusted clergy, chaplains or mentors from their own tradition, and to a counselor.
+- If there is any sign of abuse, coercion, or fear for safety, say so gently and mention the National Domestic Violence Hotline 1-800-799-7233; if any sign of hopelessness, mention calling or texting 988.
+- For mental health, mood, anxiety, stress, grief or trauma: do NOT use DSM-5 diagnostic categories, criteria, or labels, and never diagnose. Use the best current evidence instead: describe experiences on a spectrum in plain language, focus on how much it affects daily life, and draw on WHO and ICD-11 framing, NICE and WHO mhGAP guidance, and strong research on what helps (sleep, movement, daylight, connection, behavioral activation, CBT, ACT, trauma-focused therapy, problem-solving, slow breathing). Be trauma-informed and avoid pathologizing normal grief, stress or sadness. Suggest seeing a clinician when it lasts weeks, worsens, or limits life, and soon for hearing or seeing things others do not or losing touch with reality. Never name medicines or suggest starting or stopping any medicine.
+- Never name medicines. Never give legal advice beyond suggesting a lawyer for legal questions.
+Return JSON with exactly these keys:
+{"title":"3–8 word heading","summary":"3–4 compassionate sentences","reflect":["3–4 questions to think about"],"steps":["3–5 gentle, concrete next steps"],"say":["2–3 sentences they could use to start a hard conversation"],"reachOut":["2–4 kinds of people or services who could help"]}`;
+      const out = await askJSON(sys, `Patient: ${patient}.\nWhat they said: "${text}"`);
+      const arr = (x: any, n: number, m = 260) => (Array.isArray(x) ? x : []).slice(0, n).map((s: any) => clean(s, m)).filter(Boolean);
+      const guide = {
+        topic: supportTopic,
+        title: clean(out.title, 80) || fallback.title,
+        summary: clean(out.summary, 700) || fallback.summary,
+        reflect: arr(out.reflect, 4),
+        steps: arr(out.steps, 5),
+        say: arr(out.say, 3),
+        reachOut: arr(out.reachOut, 4),
+      };
+      if (!guide.reflect.length) guide.reflect = fallback.reflect;
+      if (!guide.steps.length) guide.steps = fallback.steps;
+      if (!guide.say.length) guide.say = fallback.say;
+      if (!guide.reachOut.length) guide.reachOut = fallback.reachOut;
+      return Response.json({ type: 'support', guide });
+    } catch (e) {
+      console.error('support error', e);
+      return Response.json({ type: 'support', guide: fallback });
+    }
+  }
 
   try {
     if (body.step === 'questions') {
