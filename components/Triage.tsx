@@ -94,25 +94,62 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
   }
 
   async function post(payload: any) {
-    const r = await fetch('/api/triage', { method: 'POST', headers: { 'content-type': 'application/json', 'x-terms-accepted': TERMS_VERSION, 'x-health-consent': '1' }, body: JSON.stringify(payload) });
+    let token = '';
+    try { token = sessionStorage.getItem('fd_qtoken') || ''; } catch {}
+    const r = await fetch('/api/triage', { method: 'POST', headers: { 'content-type': 'application/json', 'x-terms-accepted': TERMS_VERSION, 'x-health-consent': '1', 'x-query-token': token }, body: JSON.stringify(payload) });
     const j = await r.json();
+    if (r.status === 402) throw new Error('payment_required');
     if (!r.ok) throw new Error(j.error || 'Something went wrong. Please try again.');
     return j;
   }
 
-  async function start(e?: React.FormEvent) {
+  async function payThenResume(t: string) {
+    try { sessionStorage.setItem('fd_pending', JSON.stringify({ who, text: t })); } catch {}
+    const r = await fetch('/api/checkout', { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok || !j.url) throw new Error(j.error || 'Could not start checkout. Please try again.');
+    window.location.href = j.url;
+  }
+
+  // Back from Stripe: redeem the paid session for a one-query token, then run the saved question.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('paid');
+    if (!id) return;
+    window.history.replaceState(null, '', window.location.pathname);
+    (async () => {
+      try {
+        const r = await fetch('/api/redeem', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session_id: id }) });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error);
+        sessionStorage.setItem('fd_qtoken', j.token);
+        const p = JSON.parse(sessionStorage.getItem('fd_pending') || 'null');
+        sessionStorage.removeItem('fd_pending');
+        if (p?.text) {
+          setWho(p.who);
+          setText(p.text);
+          start(undefined, p.text, p.who);
+        }
+      } catch (err: any) {
+        setError(err.message || 'Could not verify payment.');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function start(e?: React.FormEvent, overrideText?: string, overrideWho?: Who) {
     e?.preventDefault();
     setError('');
-    const t = text.trim();
+    const t = (overrideText ?? text).trim();
     if (!t) return setError('Tell us what is going on first.');
     const em = detectEmergency(t);
     if (em) return goEmergency(em);
     setStep('loadingQ');
     track('triage_start');
     try {
-      const j = await post({ step: 'questions', who, text: t });
+      const j = await post({ step: 'questions', who: overrideWho ?? who, text: t });
       if (j.type === 'emergency') return goEmergency(j.kind);
       if (j.type === 'support') {
+        try { sessionStorage.removeItem('fd_qtoken'); } catch {}
         setGuide(j.guide);
         setStep('support');
         track('support_guide');
@@ -123,6 +160,9 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
       setAnswers({});
       setStep('questions');
     } catch (err: any) {
+      if (err.message === 'payment_required') {
+        try { await payThenResume(t); return; } catch (e2: any) { err = e2; }
+      }
       setError(err.message);
       setStep('start');
     }
@@ -137,6 +177,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
     try {
       const j = await post({ step: 'verdict', who, text: text.trim(), answers: list });
       if (j.type === 'emergency') return goEmergency(j.kind);
+      try { sessionStorage.removeItem('fd_qtoken'); } catch {}
       setVerdict(j.verdict);
       setStep('verdict');
       track('triage_verdict');
@@ -266,7 +307,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
           </div>
           {error && <p className="err">{error}</p>}
           <button className="go" type="submit" disabled={!text.trim()}>
-            Check symptoms — free
+            Check symptoms — $1
           </button>
           <p className="fine">
             You are using an AI tool, not talking to a doctor or nurse. By tapping the button, you confirm you are 18 or older, agree to the <a href="/terms">Terms</a>, and consent to sending what you type to our AI provider to get a suggestion, as described in our{' '}

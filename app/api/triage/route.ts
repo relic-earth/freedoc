@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { detectEmergency } from '@/lib/emergency';
 import { fallbackVerdict } from '@/lib/fallbackTriage';
 import { detectSupportTopic, STATIC_GUIDES } from '@/lib/support';
+import { billingOn, tokenValid } from '@/lib/pay';
 import { WHO, isLevel, type Who, type Question, type Verdict } from '@/lib/triage';
 
 export const runtime = 'nodejs';
@@ -82,6 +83,11 @@ export async function POST(req: Request) {
   const allText = [text, ...answers.map((a) => a.a)].join(' \n ');
   const emergency = detectEmergency(allText);
   if (emergency) return Response.json({ type: 'emergency', kind: emergency });
+
+  // $1 per query. Emergency screens above stay free and ungated.
+  if (billingOn() && !tokenValid(req.headers.get('x-query-token'))) {
+    return Response.json({ error: 'payment_required' }, { status: 402 });
+  }
 
   const patient = WHO[who].phrase;
 
