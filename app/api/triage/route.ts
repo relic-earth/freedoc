@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { detectEmergency } from '@/lib/emergency';
 import { fallbackVerdict } from '@/lib/fallbackTriage';
 import { detectSupportTopic, STATIC_GUIDES } from '@/lib/support';
-import { billingOn, tokenValid } from '@/lib/pay';
+import { billingOn, checkAccess, markFreeUsed, type Access } from '@/lib/pay';
 import { WHO, isLevel, type Who, type Question, type Verdict } from '@/lib/triage';
 
 export const runtime = 'nodejs';
@@ -84,10 +84,19 @@ export async function POST(req: Request) {
   const emergency = detectEmergency(allText);
   if (emergency) return Response.json({ type: 'emergency', kind: emergency });
 
-  // $1 per query. Emergency screens above stay free and ungated.
-  if (billingOn() && !tokenValid(req.headers.get('x-query-token'))) {
-    return Response.json({ error: 'payment_required' }, { status: 402 });
+  // Freemium: one free health issue per visitor, then $25/month. Emergency screens above stay free and ungated.
+  let access: Access = { ok: true, cookies: [], subscriber: false };
+  if (billingOn()) {
+    access = await checkAccess(req, String(body.step || ''));
+    if (!access.ok) return Response.json({ error: 'payment_required' }, { status: 402 });
   }
+  // Sends JSON with any cookies from the access check; delivering a result uses up the free issue.
+  const reply = (data: unknown, used = false) => {
+    const h = new Headers();
+    for (const c of access.cookies) h.append('set-cookie', c);
+    if (used && billingOn() && !access.subscriber) h.append('set-cookie', markFreeUsed());
+    return Response.json(data, { headers: h });
+  };
 
   const patient = WHO[who].phrase;
 
@@ -123,10 +132,10 @@ Return JSON with exactly these keys:
       if (!guide.steps.length) guide.steps = fallback.steps;
       if (!guide.say.length) guide.say = fallback.say;
       if (!guide.reachOut.length) guide.reachOut = fallback.reachOut;
-      return Response.json({ type: 'support', guide });
+      return reply({ type: 'support', guide }, true);
     } catch (e) {
       console.error('support error', e);
-      return Response.json({ type: 'support', guide: fallback });
+      return reply({ type: 'support', guide: fallback }, true);
     }
   }
 
@@ -149,7 +158,7 @@ Return JSON: {"questions":[{"id":"q1","text":"...","options":["..."],"multi":fal
           multi: !!q.multi,
         }))
         .filter((q: Question) => q.text && q.options.length >= 2);
-      return Response.json({ type: 'questions', questions: qs });
+      return reply({ type: 'questions', questions: qs });
     }
 
     const sys = `${BASE}
@@ -180,12 +189,12 @@ Return JSON with exactly these keys:
       askDoctor: arr(out.askDoctor, 3),
       topic: clean(out.topic, 40) || 'symptoms',
     };
-    return Response.json({ type: 'verdict', verdict });
+    return reply({ type: 'verdict', verdict }, true);
   } catch (e) {
     console.error('triage error', e);
     // Never leave people with a dead search box: if the AI provider is down or out of credits,
     // skip the follow-up questions and answer from the built-in symptom guidance.
-    if (body.step === 'questions') return Response.json({ type: 'questions', questions: [] });
-    return Response.json({ type: 'verdict', verdict: fallbackVerdict(text, who) });
+    if (body.step === 'questions') return reply({ type: 'questions', questions: [] });
+    return reply({ type: 'verdict', verdict: fallbackVerdict(text, who) }, true);
   }
 }

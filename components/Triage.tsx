@@ -8,7 +8,7 @@ import { LEVELS, WHO, medlineUrl, type Question, type Verdict, type Who } from '
 import { CARE, SPONSOR } from '@/lib/partners';
 import { BotLine, Reactor } from '@/components/Chrome';
 
-type Step = 'start' | 'loadingQ' | 'questions' | 'loadingV' | 'verdict' | 'emergency' | 'support';
+type Step = 'paywall' | 'start' | 'loadingQ' | 'questions' | 'loadingV' | 'verdict' | 'emergency' | 'support';
 
 const EXAMPLES: Record<Who, string[]> = {
   me: ['Headache and fever since yesterday', 'Sore throat and it hurts to swallow', 'Twisted my ankle and it is swollen', 'Stomach pain on the lower right side'],
@@ -94,9 +94,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
   }
 
   async function post(payload: any) {
-    let token = '';
-    try { token = sessionStorage.getItem('fd_qtoken') || ''; } catch {}
-    const r = await fetch('/api/triage', { method: 'POST', headers: { 'content-type': 'application/json', 'x-terms-accepted': TERMS_VERSION, 'x-health-consent': '1', 'x-query-token': token }, body: JSON.stringify(payload) });
+    const r = await fetch('/api/triage', { method: 'POST', headers: { 'content-type': 'application/json', 'x-terms-accepted': TERMS_VERSION, 'x-health-consent': '1' }, body: JSON.stringify(payload) });
     const j = await r.json();
     if (r.status === 402) throw new Error('payment_required');
     if (!r.ok) throw new Error(j.error || 'Something went wrong. Please try again.');
@@ -105,6 +103,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
 
   async function payThenResume(t: string) {
     try { sessionStorage.setItem('fd_pending', JSON.stringify({ who, text: t })); } catch {}
+    track('subscribe_click');
     const r = await fetch('/api/checkout', { method: 'POST' });
     const j = await r.json();
     if (!r.ok || !j.url) throw new Error(j.error || 'Could not start checkout. Please try again.');
@@ -121,7 +120,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
         const r = await fetch('/api/redeem', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session_id: id }) });
         const j = await r.json();
         if (!r.ok) throw new Error(j.error);
-        sessionStorage.setItem('fd_qtoken', j.token);
+        track('subscribed');
         const p = JSON.parse(sessionStorage.getItem('fd_pending') || 'null');
         sessionStorage.removeItem('fd_pending');
         if (p?.text) {
@@ -149,7 +148,6 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
       const j = await post({ step: 'questions', who: overrideWho ?? who, text: t });
       if (j.type === 'emergency') return goEmergency(j.kind);
       if (j.type === 'support') {
-        try { sessionStorage.removeItem('fd_qtoken'); } catch {}
         setGuide(j.guide);
         setStep('support');
         track('support_guide');
@@ -161,7 +159,9 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
       setStep('questions');
     } catch (err: any) {
       if (err.message === 'payment_required') {
-        try { await payThenResume(t); return; } catch (e2: any) { err = e2; }
+        try { sessionStorage.setItem('fd_pending', JSON.stringify({ who: overrideWho ?? who, text: t })); } catch {}
+        setStep('paywall');
+        return;
       }
       setError(err.message);
       setStep('start');
@@ -177,11 +177,15 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
     try {
       const j = await post({ step: 'verdict', who, text: text.trim(), answers: list });
       if (j.type === 'emergency') return goEmergency(j.kind);
-      try { sessionStorage.removeItem('fd_qtoken'); } catch {}
       setVerdict(j.verdict);
       setStep('verdict');
       track('triage_verdict');
     } catch (err: any) {
+      if (err.message === 'payment_required') {
+        try { sessionStorage.setItem('fd_pending', JSON.stringify({ who, text: text.trim() })); } catch {}
+        setStep('paywall');
+        return;
+      }
       setError(err.message);
       setStep('questions');
     }
@@ -307,8 +311,9 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
           </div>
           {error && <p className="err">{error}</p>}
           <button className="go" type="submit" disabled={!text.trim()}>
-            Check symptoms — $1
+            Check symptoms
           </button>
+          <p className="fine">Your first health check is free. After that, unlimited checks are $25/month. Cancel any time.</p>
           <p className="fine">
             You are using an AI tool, not talking to a doctor or nurse. By tapping the button, you confirm you are 18 or older, agree to the <a href="/terms">Terms</a>, and consent to sending what you type to our AI provider to get a suggestion, as described in our{' '}
             <a href="/health-data">Health Data Policy</a>. FreeDoc is not medical advice. Emergency? Call 911.
@@ -356,6 +361,22 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
           <button className="link-btn" onClick={reset}>
             Start over
           </button>
+        </div>
+      )}
+
+      {step === 'paywall' && (
+        <div className="card paywall" aria-live="polite">
+          <BotLine note="" />
+          <p className="big">You’ve used your free health check.</p>
+          <p className="lede">Get unlimited checks for your whole household for $25/month. Cancel any time. Emergency screens always stay free.</p>
+          {error && <p className="err">{error}</p>}
+          <button className="go" type="button" onClick={() => payThenResume(text.trim()).catch((e: any) => setError(e.message))}>
+            Subscribe — $25/month
+          </button>
+          <button className="link-btn" type="button" onClick={reset}>
+            Back
+          </button>
+          <p className="fine">Payments are handled securely by Stripe. Already subscribed on this device? You’re set; if this keeps showing, email info@island.contact.</p>
         </div>
       )}
 
