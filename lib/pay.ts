@@ -6,7 +6,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 export const SUBSCRIPTION_PRICE_CENTS = 2500;
 export const billingOn = () => !!process.env.STRIPE_SECRET_KEY;
 
-const secret = () => process.env.QUERY_TOKEN_SECRET || process.env.STRIPE_SECRET_KEY || '';
+const secret = () => process.env.QUERY_TOKEN_SECRET || process.env.STRIPE_SECRET_KEY || process.env.BLOB_READ_WRITE_TOKEN || '';
 const SUB_TTL_MS = 24 * 60 * 60 * 1000; // re-check the subscription with Stripe at least daily
 const PROGRESS_TTL_MS = 30 * 60 * 1000; // a free check in progress stays open for 30 minutes
 const YEAR_S = 365 * 24 * 60 * 60;
@@ -123,3 +123,7 @@ export async function createPortal(req: Request, origin: string) {
   const s = await stripe('/billing_portal/sessions', { method: 'POST', body: new URLSearchParams({ customer: sub.custId, return_url: origin }) });
   return s.url as string;
 }
+
+// Registration (name, address, phone, email) is required before any check; this cookie records that it was done.
+export const markRegistered = () => setCookie('fd_reg', pack('r'), YEAR_S);
+export const isRegistered = (req: Request) => unpack(readCookie(req, 'fd_reg')) === 'r';

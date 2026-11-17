@@ -8,7 +8,7 @@ import { LEVELS, WHO, medlineUrl, type Question, type Verdict, type Who } from '
 import { CARE, SPONSOR } from '@/lib/partners';
 import { BotLine, Reactor } from '@/components/Chrome';
 
-type Step = 'paywall' | 'start' | 'loadingQ' | 'questions' | 'loadingV' | 'verdict' | 'emergency' | 'support';
+type Step = 'register' | 'paywall' | 'start' | 'loadingQ' | 'questions' | 'loadingV' | 'verdict' | 'emergency' | 'support';
 
 const EXAMPLES: Record<Who, string[]> = {
   me: ['Headache and fever since yesterday', 'Sore throat and it hurts to swallow', 'Twisted my ankle and it is swollen', 'Stomach pain on the lower right side'],
@@ -96,6 +96,7 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
   async function post(payload: any) {
     const r = await fetch('/api/triage', { method: 'POST', headers: { 'content-type': 'application/json', 'x-terms-accepted': TERMS_VERSION, 'x-health-consent': '1' }, body: JSON.stringify(payload) });
     const j = await r.json();
+    if (r.status === 403 && j.error === 'registration_required') throw new Error('registration_required');
     if (r.status === 402) throw new Error('payment_required');
     if (!r.ok) throw new Error(j.error || 'Something went wrong. Please try again.');
     return j;
@@ -135,6 +136,21 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function register(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError('');
+    const data = Object.fromEntries(new FormData(e.currentTarget).entries());
+    try {
+      const r = await fetch('/api/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Something went wrong. Please try again.');
+      track('registered');
+      start(undefined, text, who);
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
   async function start(e?: React.FormEvent, overrideText?: string, overrideWho?: Who) {
     e?.preventDefault();
     setError('');
@@ -158,6 +174,10 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
       setAnswers({});
       setStep('questions');
     } catch (err: any) {
+      if (err.message === 'registration_required') {
+        setStep('register');
+        return;
+      }
       if (err.message === 'payment_required') {
         try { sessionStorage.setItem('fd_pending', JSON.stringify({ who: overrideWho ?? who, text: t })); } catch {}
         setStep('paywall');
@@ -181,6 +201,10 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
       setStep('verdict');
       track('triage_verdict');
     } catch (err: any) {
+      if (err.message === 'registration_required') {
+        setStep('register');
+        return;
+      }
       if (err.message === 'payment_required') {
         try { sessionStorage.setItem('fd_pending', JSON.stringify({ who, text: text.trim() })); } catch {}
         setStep('paywall');
@@ -362,6 +386,21 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
             Start over
           </button>
         </div>
+      )}
+
+      {step === 'register' && (
+        <form className="card" onSubmit={register}>
+          <BotLine note="" />
+          <p className="big">Before you start, tell us who you are.</p>
+          <p className="lede">Your name, address, phone number and email are required to use FreeDoc. See our <a href="/privacy">Privacy Policy</a>.</p>
+          <input name="name" type="text" autoComplete="name" placeholder="Full name" required />
+          <input name="address" type="text" autoComplete="street-address" placeholder="Home address" required />
+          <input name="phone" type="tel" autoComplete="tel" placeholder="Phone number" required />
+          <input name="email" type="email" autoComplete="email" placeholder="Email" required />
+          {error && <p className="err">{error}</p>}
+          <button className="go" type="submit">Continue</button>
+          <button className="link-btn" type="button" onClick={reset}>Back</button>
+        </form>
       )}
 
       {step === 'paywall' && (

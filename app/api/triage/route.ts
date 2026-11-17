@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { detectEmergency } from '@/lib/emergency';
 import { fallbackVerdict } from '@/lib/fallbackTriage';
 import { detectSupportTopic, STATIC_GUIDES } from '@/lib/support';
-import { billingOn, checkAccess, markFreeUsed, type Access } from '@/lib/pay';
+import { billingOn, checkAccess, isRegistered, markFreeUsed, type Access } from '@/lib/pay';
 import { WHO, isLevel, type Who, type Question, type Verdict } from '@/lib/triage';
 
 export const runtime = 'nodejs';
@@ -83,6 +83,9 @@ export async function POST(req: Request) {
   const allText = [text, ...answers.map((a) => a.a)].join(' \n ');
   const emergency = detectEmergency(allText);
   if (emergency) return Response.json({ type: 'emergency', kind: emergency });
+
+  // Name, address, phone and email are required before using the site. Emergency screens above stay open.
+  if (!isRegistered(req)) return Response.json({ error: 'registration_required' }, { status: 403 });
 
   // Freemium: one free health issue per visitor, then $25/month. Emergency screens above stay free and ungated.
   let access: Access = { ok: true, cookies: [], subscriber: false };
