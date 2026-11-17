@@ -31,7 +31,7 @@ export default async function Plus({ searchParams }: { searchParams: SP }) {
               $0 <small>available now</small>
             </div>
             <ul>
-              <li>One free AI symptom check, then $25/month for unlimited checks</li>
+              <li>AI symptom checks: $1 each, or $25/month for unlimited</li>
               <li>Four suggested care levels</li>
               <li>Share and send summaries</li>
               <li>Emergency shortcuts</li>

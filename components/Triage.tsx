@@ -102,10 +102,10 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
     return j;
   }
 
-  async function payThenResume(t: string) {
+  async function payThenResume(t: string, kind: 'check' | 'sub' = 'check') {
     try { sessionStorage.setItem('fd_pending', JSON.stringify({ who, text: t })); } catch {}
     track('subscribe_click');
-    const r = await fetch('/api/checkout', { method: 'POST' });
+    const r = await fetch('/api/checkout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind }) });
     const j = await r.json();
     if (!r.ok || !j.url) throw new Error(j.error || 'Could not start checkout. Please try again.');
     window.location.href = j.url;
@@ -335,9 +335,9 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
           </div>
           {error && <p className="err">{error}</p>}
           <button className="go" type="submit" disabled={!text.trim()}>
-            Check symptoms
+            Check symptoms — $1
           </button>
-          <p className="fine">Your first health check is free. After that, unlimited checks are $25/month. Cancel any time.</p>
+          <p className="fine">Each health check costs $1, or get unlimited checks for $25/month. Emergency screens are always free.</p>
           <p className="fine">
             You are using an AI tool, not talking to a doctor or nurse. By tapping the button, you confirm you are 18 or older, agree to the <a href="/terms">Terms</a>, and consent to sending what you type to our AI provider to get a suggestion, as described in our{' '}
             <a href="/health-data">Health Data Policy</a>. FreeDoc is not medical advice. Emergency? Call 911.
@@ -406,11 +406,14 @@ export default function Triage({ initialText = '', initialWho = 'me' as Who, aut
       {step === 'paywall' && (
         <div className="card paywall" aria-live="polite">
           <BotLine note="" />
-          <p className="big">You’ve used your free health check.</p>
-          <p className="lede">Get unlimited checks for your whole household for $25/month. Cancel any time. Emergency screens always stay free.</p>
+          <p className="big">Each health check costs $1.</p>
+          <p className="lede">Pay $1 to run this check, or get unlimited checks for $25/month (cancel any time). Emergency screens always stay free.</p>
           {error && <p className="err">{error}</p>}
-          <button className="go" type="button" onClick={() => payThenResume(text.trim()).catch((e: any) => setError(e.message))}>
-            Subscribe — $25/month
+          <button className="go" type="button" onClick={() => payThenResume(text.trim(), 'check').catch((e: any) => setError(e.message))}>
+            Pay $1 and check
+          </button>
+          <button className="go" type="button" onClick={() => payThenResume(text.trim(), 'sub').catch((e: any) => setError(e.message))}>
+            Unlimited — $25/month
           </button>
           <button className="link-btn" type="button" onClick={reset}>
             Back

@@ -1,14 +1,14 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { put } from '@vercel/blob';
 
-// Freemium: every visitor gets ONE free health issue (one full check, questions + result).
-// After that FreeDoc is $25/month via Stripe Checkout (subscription).
-// Gating switches on as soon as STRIPE_SECRET_KEY is set in Vercel; emergency screens are always free.
+// $1 per health check, or $25/month for unlimited checks. Gating switches on when STRIPE_SECRET_KEY is set; emergency screens are always free.
+export const QUERY_PRICE_CENTS = 100;
 export const SUBSCRIPTION_PRICE_CENTS = 2500;
 export const billingOn = () => !!process.env.STRIPE_SECRET_KEY;
 
 const secret = () => process.env.QUERY_TOKEN_SECRET || process.env.STRIPE_SECRET_KEY || process.env.BLOB_READ_WRITE_TOKEN || '';
 const SUB_TTL_MS = 24 * 60 * 60 * 1000; // re-check the subscription with Stripe at least daily
-const PROGRESS_TTL_MS = 30 * 60 * 1000; // a free check in progress stays open for 30 minutes
+const QUERY_TTL_MS = 30 * 60 * 1000; // a paid $1 check stays open for 30 minutes
 const YEAR_S = 365 * 24 * 60 * 60;
 
 function sign(payload: string) {
@@ -55,17 +55,18 @@ async function stripe(path: string, init?: RequestInit) {
 
 const isActive = (status: string) => status === 'active' || status === 'trialing';
 
-export async function createCheckout(origin: string) {
+export async function createCheckout(origin: string, kind: 'check' | 'sub' = 'check') {
+  const sub = kind === 'sub';
   const body = new URLSearchParams({
-    mode: 'subscription',
+    mode: sub ? 'subscription' : 'payment',
     'line_items[0][quantity]': '1',
     'line_items[0][price_data][currency]': 'usd',
-    'line_items[0][price_data][unit_amount]': String(SUBSCRIPTION_PRICE_CENTS),
-    'line_items[0][price_data][recurring][interval]': 'month',
-    'line_items[0][price_data][product_data][name]': 'FreeDoc: unlimited health checks',
+    'line_items[0][price_data][unit_amount]': String(sub ? SUBSCRIPTION_PRICE_CENTS : QUERY_PRICE_CENTS),
+    'line_items[0][price_data][product_data][name]': sub ? 'FreeDoc: unlimited health checks (monthly)' : 'FreeDoc: 1 health check',
     success_url: `${origin}/?paid={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/?canceled=1`,
   });
+  if (sub) body.set('line_items[0][price_data][recurring][interval]', 'month');
   const s = await stripe('/checkout/sessions', { method: 'POST', body });
   return s.url as string;
 }
@@ -74,13 +75,22 @@ function subCookie(subId: string, custId: string) {
   return setCookie('fd_sub', pack(`${subId}.${custId}.${Date.now() + SUB_TTL_MS}`), YEAR_S);
 }
 
-// After Checkout: confirm the session is a completed, active subscription and issue the subscriber cookie.
-export async function redeemSubscription(sessionId: string): Promise<string | null> {
+// After Checkout: confirm payment, then issue a subscriber cookie (monthly plan) or a one-check cookie ($1).
+export async function redeemSession(sessionId: string): Promise<string | null> {
   if (!/^cs_[A-Za-z0-9_]+$/.test(sessionId)) return null;
   const s = await stripe(`/checkout/sessions/${sessionId}?expand[]=subscription`, { method: 'GET' });
-  const sub = s.subscription;
-  if (s.mode !== 'subscription' || s.status !== 'complete' || !sub || typeof sub !== 'object' || !isActive(sub.status)) return null;
-  return subCookie(sub.id, typeof s.customer === 'string' ? s.customer : s.customer?.id || sub.customer);
+  if (s.mode === 'subscription') {
+    const sub = s.subscription;
+    if (s.status !== 'complete' || !sub || typeof sub !== 'object' || !isActive(sub.status)) return null;
+    return subCookie(sub.id, typeof s.customer === 'string' ? s.customer : s.customer?.id || sub.customer);
+  }
+  if (s.payment_status !== 'paid' || s.amount_total < QUERY_PRICE_CENTS) return null;
+  try {
+    await put(`used-sessions/${sessionId}`, '1', { access: 'public', addRandomSuffix: false, allowOverwrite: false });
+  } catch {
+    return null; // already redeemed
+  }
+  return setCookie('fd_q', pack(`q.${Date.now() + QUERY_TTL_MS}`), QUERY_TTL_MS / 1000);
 }
 
 export function subscriberFromCookie(req: Request) {
@@ -92,7 +102,7 @@ export function subscriberFromCookie(req: Request) {
 
 export type Access = { ok: boolean; cookies: string[]; subscriber: boolean };
 
-// Decides whether this request may run a check. Subscribers always can; everyone else gets one free issue.
+// Decides whether this request may run a check: subscribers always can; everyone else needs a paid $1 check.
 export async function checkAccess(req: Request, step: string): Promise<Access> {
   const sub = subscriberFromCookie(req);
   if (sub) {
@@ -104,18 +114,13 @@ export async function checkAccess(req: Request, step: string): Promise<Access> {
       console.error('subscription check error', e);
     }
   }
-  const free = unpack(readCookie(req, 'fd_free'));
-  if (free === 'u') return { ok: false, cookies: [], subscriber: false };
-  if (free?.startsWith('p.') && Number(free.slice(2)) > Date.now()) return { ok: true, cookies: [], subscriber: false };
-  if (step === 'questions' || !free) {
-    // Opens the free check for 30 minutes so the follow-up questions and the result belong to one issue.
-    return { ok: true, cookies: [setCookie('fd_free', pack(`p.${Date.now() + PROGRESS_TTL_MS}`), PROGRESS_TTL_MS / 1000)], subscriber: false };
-  }
+  const q = unpack(readCookie(req, 'fd_q'));
+  if (q?.startsWith('q.') && Number(q.slice(2)) > Date.now()) return { ok: true, cookies: [], subscriber: false };
   return { ok: false, cookies: [], subscriber: false };
 }
 
-// The free issue is used up once a result (or support guide) has been delivered.
-export const markFreeUsed = () => setCookie('fd_free', pack('u'), YEAR_S);
+// The paid $1 check is used up once a result (or support guide) has been delivered.
+export const markFreeUsed = () => setCookie('fd_q', '', 0);
 
 export async function createPortal(req: Request, origin: string) {
   const sub = subscriberFromCookie(req);
