@@ -1,8 +1,8 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Site-wide password gate. Password: "Slytherin" (case-insensitive). Override with SITE_PASSWORD in Vercel.
-const PASSWORD = () => (process.env.SITE_PASSWORD || 'Slytherin').trim().toLowerCase();
+// Site-wide password gate. Password: "KILL EVIL" (case-insensitive). Override with SITE_PASSWORD in Vercel.
+const PASSWORD = () => (process.env.SITE_PASSWORD || 'KILL EVIL').trim().toLowerCase();
 const KEY = () => process.env.QUERY_TOKEN_SECRET || process.env.STRIPE_SECRET_KEY || process.env.BLOB_READ_WRITE_TOKEN || 'freedoc-gate';
 const token = () => createHmac('sha256', KEY()).update(`gate:${PASSWORD()}`).digest('base64url');
 
@@ -31,7 +31,7 @@ export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
   if (pathname === '/__gate' && req.method === 'POST') {
     const f = await req.formData();
-    const pw = String(f.get('password') || '').trim().toLowerCase();
+    const pw = String(f.get('password') || '').trim().replace(/\s+/g, ' ').toLowerCase();
     let next = String(f.get('next') || '/');
     if (!next.startsWith('/') || next.startsWith('//')) next = '/';
     if (pw !== PASSWORD()) return page(true, next);
